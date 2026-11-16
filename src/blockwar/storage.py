@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from .models import DEFAULT_SIZE, VALID_SIZES
+from .mathmode import MathSettings, settings_from_dict, settings_from_legacy_level
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +20,9 @@ _LEVELS = ("facil", "medio", "dificil")
 
 @dataclass
 class SaveData:
-    size: int = DEFAULT_SIZE
     mode: str = "bot"
     bot_level: str = "medio"
-    math_level: int = 0
+    math: MathSettings = field(default_factory=MathSettings)
     games_played: int = 0
     records: dict[str, dict[str, int]] = field(default_factory=dict)
 
@@ -63,14 +62,14 @@ def load_save(path: Optional[Path] = None) -> SaveData:
         return SaveData()
     if not isinstance(raw, dict):
         return SaveData()
-    size = raw.get("size")
-    mode, level, math = raw.get("mode"), raw.get("bot_level"), raw.get("math_level")
+    mode, level = raw.get("mode"), raw.get("bot_level")
+    # Saves antigos tinham só um "math_level" (0 a 3); os novos guardam as escolhas.
+    math = (settings_from_dict(raw["math"]) if "math" in raw
+            else settings_from_legacy_level(raw.get("math_level")))
     return SaveData(
-        size=size if size in VALID_SIZES else DEFAULT_SIZE,
         mode=mode if mode in _MODES else "bot",
         bot_level=level if level in _LEVELS else "medio",
-        math_level=math if isinstance(math, int) and not isinstance(math, bool)
-        and 0 <= math <= 3 else 0,
+        math=math,
         games_played=_int(raw.get("games_played"), 0),
         records=_clean_records(raw.get("records")),
     )
@@ -79,8 +78,8 @@ def load_save(path: Optional[Path] = None) -> SaveData:
 def save_save(data: SaveData, path: Optional[Path] = None) -> bool:
     """Grava com arquivo temporário + troca, para não deixar o save pela metade."""
     path = path or default_path()
-    payload = {"size": data.size, "mode": data.mode, "bot_level": data.bot_level,
-               "math_level": data.math_level, "games_played": data.games_played,
+    payload = {"mode": data.mode, "bot_level": data.bot_level,
+               "math": data.math.to_dict(), "games_played": data.games_played,
                "records": data.records}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

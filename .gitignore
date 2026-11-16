@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Flet: local dev storage created by `flet run` (saves, cache, temp files)
+.flet/

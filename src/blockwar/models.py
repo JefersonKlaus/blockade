@@ -7,9 +7,8 @@ from typing import Tuple
 # Uma posição no tabuleiro: (linha, coluna), começando em zero no canto superior esquerdo.
 Pos = Tuple[int, int]
 
-VALID_SIZES = (5, 7)  # tamanhos do menu (ambos ímpares: sem empate com tabuleiro cheio)
-DEFAULT_SIZE = 7
-MIN_BOARD, MAX_BOARD = 4, 9  # limites aceitos pelo motor
+DEFAULT_SIZE = 7             # tamanho usado quando a tela ainda não informou a dela
+MIN_BOARD, MAX_BOARD = 4, 14  # limites aceitos pelo motor (o tamanho vem da tela)
 
 
 class Player(Enum):

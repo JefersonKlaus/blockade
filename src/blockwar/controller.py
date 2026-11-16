@@ -6,13 +6,13 @@ Assim, quase todo o comportamento do jogo pode ser testado sem abrir o Flet.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
 from .bot import Level, choose_move, level_from_value
 from .game import Game, MoveResult
-from .mathmode import Question, is_correct, make_question
+from .mathmode import MathSettings, Question, is_correct, make_question
 from .models import DEFAULT_SIZE, Player, Pos
 from .storage import SaveData, record_for, record_outcome
 
@@ -38,27 +38,29 @@ class Setup:
     """Escolhas do menu."""
 
     mode: Mode = Mode.BOT
-    size: int = DEFAULT_SIZE
+    size: int = DEFAULT_SIZE     # a interface troca pelo maior que cabe na tela
     bot_level: Level = Level.MEDIUM
-    math_level: int = 0          # 0 = sem contas
+    math: MathSettings = field(default_factory=MathSettings)  # desligado por padrão
     seed: Optional[int] = None
 
     @property
     def record_key(self) -> Optional[str]:
-        """Chave do recorde (só existe contra o celular)."""
+        """Chave do recorde (só existe contra o celular): tamanho, nível do celular e se as
+        contas estão ligadas (1) ou não (0). Recordes com e sem contas ficam separados."""
         if self.mode is not Mode.BOT:
             return None
-        return f"{self.size}:{self.bot_level.value}:{self.math_level}"
+        return f"{self.size}:{self.bot_level.value}:{1 if self.math.enabled else 0}"
 
 
 def setup_from_save(data: SaveData) -> Setup:
-    return Setup(mode=Mode.TWO if data.mode == "dois" else Mode.BOT, size=data.size,
-                 bot_level=level_from_value(data.bot_level), math_level=data.math_level)
+    """O tamanho do tabuleiro não é salvo: ele vem da tela de cada aparelho."""
+    return Setup(mode=Mode.TWO if data.mode == "dois" else Mode.BOT,
+                 bot_level=level_from_value(data.bot_level), math=data.math)
 
 
 def store_setup(data: SaveData, setup: Setup) -> None:
-    data.size, data.mode = setup.size, setup.mode.value
-    data.bot_level, data.math_level = setup.bot_level.value, setup.math_level
+    data.mode = setup.mode.value
+    data.bot_level, data.math = setup.bot_level.value, setup.math
 
 
 def blocks_word(count: int) -> str:
@@ -66,11 +68,14 @@ def blocks_word(count: int) -> str:
 
 
 def record_summary(data: SaveData, setup: Setup) -> str:
-    """Texto do recorde para as escolhas do menu (vazio no modo pai e filho)."""
+    """Texto do recorde para as escolhas do menu: vazio no modo pai e filho, e também
+    antes da primeira partida naquele nível (nada para mostrar ainda)."""
     key = setup.record_key
     if key is None:
         return ""
     entry = record_for(data, key)
+    if not any(entry.values()):
+        return ""
     return (f"Neste nível: {entry['wins']} vitórias, {entry['losses']} derrotas, "
             f"{entry['draws']} empates")
 
@@ -112,7 +117,7 @@ class Match:
         return f"Vez do {player.label} {player.symbol}"
 
     def _set_turn_message(self) -> None:
-        if self.setup.math_level:
+        if self.setup.math.enabled:
             self.message = "Toque numa casa. Depois de confirmar, responda a conta."
         else:
             self.message = "Toque numa casa para ver o que vira."
@@ -126,6 +131,11 @@ class Match:
         return f"{winner.label} venceu!"
 
     # ------------------------------------------------------------- consulta
+
+    @property
+    def helpers_allowed(self) -> bool:
+        """Dica e Desfazer são ajudas de iniciante: só contra o celular no nível Fácil."""
+        return self.setup.mode is Mode.BOT and self.setup.bot_level is Level.EASY
 
     @property
     def is_over(self) -> bool:
@@ -160,8 +170,8 @@ class Match:
         """Confirma a casa selecionada (pergunta uma conta antes, se o modo estiver ligado)."""
         if self.phase is not Phase.CHOOSING or self.pending is None:
             return "ignored"
-        if self.setup.math_level:
-            self.question = make_question(self.setup.math_level, self.rng)
+        if self.setup.math.enabled:
+            self.question = make_question(self.setup.math, self.rng)
             self.phase = Phase.QUESTION
             self.message = "Responda certo para colocar o bloco!"
             return "question"
@@ -220,6 +230,8 @@ class Match:
 
     def undo(self) -> bool:
         """Desfaz a última vez (contra o celular, desfaz também a resposta dele)."""
+        if not self.helpers_allowed:
+            return False
         if self.phase is not Phase.CHOOSING or self.undos_left <= 0 or not self.game.can_undo:
             return False
         self.game.undo()
@@ -234,7 +246,7 @@ class Match:
 
     def hint(self) -> Optional[Pos]:
         """Sugere uma casa (a escolha de um robô médio, sempre a mesma para a mesma posição)."""
-        if self.phase is not Phase.CHOOSING:
+        if not self.helpers_allowed or self.phase is not Phase.CHOOSING:
             return None
         rng = random.Random(self.game.turn)
         self.hint_pos = choose_move(self.game.board, self.game.current, Level.MEDIUM, rng)

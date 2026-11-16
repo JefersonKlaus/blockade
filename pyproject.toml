@@ -3,32 +3,61 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "guerra-dos-blocos"
+name = "blockade"
 version = "0.1.0"
-description = "Jogo de tabuleiro por turnos: espreme os blocos do adversario e vire-os para o seu lado."
+description = "Blockade: turn-based board game for kids. Squeeze the other side's blocks to turn them into yours."
 readme = "README.md"
 requires-python = ">=3.10"
+# Runtime dependencies only. `flet build` installs exactly this list inside the
+# Android/iOS app, so do not add development tools here.
 dependencies = [
-    "flet>=1.0",
+    "flet>=1.0,<2",
 ]
 
 [project.optional-dependencies]
+# `pip install -e ".[dev]"` gives you everything needed to develop:
+#   flet[all] -> the `flet` CLI (run/build/debug) plus the desktop and web runners
+#   pytest    -> test suite;  pytest-cov -> coverage report
+#   pillow    -> only for tools/make_icon.py (draws src/assets/icon.png)
 dev = [
+    "flet[all]>=1.0,<2",
     "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pillow>=10.0",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Configuracao lida pelo comando `flet run` (e depois por `flet build`).
+# ---------------------------------------------------------------------------
+# Flet configuration, read by `flet run`, `flet debug` and `flet build`.
+# ---------------------------------------------------------------------------
 [tool.flet]
-org = "dev.guerradosblocos"
-product = "Guerra dos Blocos"
+org = "dev.guerradosblocos"          # reverse domain; bundle id = org + project name
+product = "Blockade"                 # app name shown under the icon on the phone
 copyright = "Copyright (c) 2026"
+# App icon: src/assets/icon.png (transparent, drawn by tools/make_icon.py). Where a
+# platform needs a solid background (iOS, macOS, Android adaptive icons) use the
+# app's cream page colour.
+icon_background = "#FFF8F0"
+
+[tool.flet.android]
+adaptive_icon_background = "#FFF8F0"
 
 [tool.flet.app]
-path = "src"
+path = "src"     # `flet run` / `flet build` look for the app in this folder...
+module = "main"  # ...and start it from src/main.py
+
+# The game is portrait-only. On phones the app locks itself at startup
+# (page.set_allowed_device_orientations in ui.py). iPads only honour that lock when the
+# app opts out of split-screen multitasking:
+[tool.flet.ios.info]
+UIRequiresFullScreen = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+addopts = ["--strict-markers", "-ra"]
+markers = [
+    "slow: long-running checks (bot balance); skip with -m 'not slow'",
+]

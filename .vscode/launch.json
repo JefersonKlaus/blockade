@@ -1,0 +1,50 @@
+{
+    // Debug configurations for VS Code (needs the "Python Debugger" extension).
+    // Pick one in the Run and Debug panel (Ctrl+Shift+D / Cmd+Shift+D) and press F5.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Game: desktop window (breakpoints)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                // Same save location as `flet run`, so scores are shared between both.
+                "FLET_APP_STORAGE_DATA": "${workspaceFolder}/.flet/storage/data"
+            }
+        },
+        {
+            "name": "Tests: all",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["-q"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Tests: current file",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["-q", "${file}"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Simulation: bot vs bot",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "blockwar.simulate",
+            "args": ["--games", "10", "--size", "7", "--blue", "dificil", "--orange", "facil"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": { "PYTHONPATH": "${workspaceFolder}/src" }
+        }
+    ]
+}
