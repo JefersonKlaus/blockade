@@ -1,6 +1,7 @@
-"""Robô contra robô: serve para conferir o equilíbrio dos níveis.
+"""Computer against computer: checks the balance of the levels.
 
-Uso:  python -m blockwar.simulate --games 40 --size 7 --blue dificil --orange facil
+Usage:  python -m blockwar.simulate --games 40 --size 7 --blue dificil --orange facil
+Levels: facil (easy), medio (medium), dificil (hard).
 """
 from __future__ import annotations
 
@@ -15,21 +16,21 @@ from .models import Player
 
 
 def play_game(size: int, blue: Level, orange: Level, seed: int) -> Optional[Player]:
-    """Joga uma partida completa entre dois robôs e devolve o vencedor (None = empate)."""
+    """Plays a full game between two computers and returns the winner (None = a draw)."""
     rng = random.Random(seed)
     game = Game(size)
     levels = {Player.BLUE: blue, Player.ORANGE: orange}
     while not game.over:
         pos = choose_move(game.board, game.current, levels[game.current], rng)
-        assert pos is not None  # partida não acabou, então há casa livre
+        assert pos is not None  # the game is not over, so a square is free
         game.play(pos)
     return game.winner
 
 
 def tournament(games: int, size: int, blue: Level, orange: Level, seed: int = 0) -> Counter:
-    """Joga várias partidas; em metade delas os lados trocam de nível (para ser justo)."""
+    """Plays several games; in half of them the sides swap levels (to be fair)."""
     if games < 1:
-        raise ValueError("games deve ser pelo menos 1")
+        raise ValueError("games must be at least 1")
     tally: Counter = Counter()
     for i in range(games):
         swap = i % 2 == 1
@@ -44,7 +45,7 @@ def tournament(games: int, size: int, blue: Level, orange: Level, seed: int = 0)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Simula partidas entre robôs.")
+    parser = argparse.ArgumentParser(description="Simulates games between computer players.")
     parser.add_argument("--games", type=int, default=40)
     parser.add_argument("--size", type=int, default=7)
     parser.add_argument("--blue", default="dificil")
@@ -53,9 +54,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     first, second = level_from_value(args.blue), level_from_value(args.orange)
     tally = tournament(args.games, args.size, first, second, args.seed)
-    print(f"{first.value} x {second.value} em {args.size}x{args.size}, {args.games} partidas: "
+    print(f"{first.value} x {second.value} on {args.size}x{args.size}, {args.games} games: "
           f"{first.value} {tally['first']}, {second.value} {tally['second']}, "
-          f"empates {tally['draw']}")
+          f"draws {tally['draw']}")
     return 0
 
 

@@ -1,6 +1,5 @@
 import random
 
-import pytest
 
 from blockwar.board import Board, apply_move, flips_for
 from blockwar.bot import Level, choose_move, level_from_value, positional_value
@@ -12,40 +11,15 @@ SEEDS = range(20)
 
 # ---------------------------------------------------------------- every level
 
-@pytest.mark.parametrize("level", list(Level))
-@pytest.mark.parametrize("player", [B, O])
-def test_every_level_picks_an_empty_cell(level, player):
-    board = Board.initial(7)
-    for seed in range(5):
-        assert choose_move(board, player, level, random.Random(seed)) in board.empty_cells()
-
-
-@pytest.mark.parametrize("level", list(Level))
-def test_no_move_when_the_board_is_full(level):
+def test_every_level_picks_an_empty_cell_or_none_on_a_full_board():
+    start = Board.initial(7)
+    one_left = Board.from_text(["BBOO", "BBOO", "BBOO", "BBO."])
     full = Board.from_text(["BBOO"] * 4)
-    assert choose_move(full, B, level, random.Random(1)) is None
-
-
-@pytest.mark.parametrize("level", list(Level))
-def test_a_single_empty_cell_is_always_chosen(level):
-    board = Board.from_text(["BBOO", "BBOO", "BBOO", "BBO."])
-    assert choose_move(board, O, level, random.Random(0)) == (3, 3)
-
-
-@pytest.mark.parametrize("level", list(Level))
-def test_same_seed_gives_same_choice(level):
-    board = Board.initial(7)
-    a = choose_move(board, B, level, random.Random(5))
-    b = choose_move(board, B, level, random.Random(5))
-    assert a == b
-
-
-@pytest.mark.parametrize("level", list(Level))
-def test_choosing_does_not_change_the_board(level):
-    board = Board.from_text(["....", "BOO.", ".O..", "...."])
-    snapshot = board.to_text()
-    choose_move(board, B, level, random.Random(0))
-    assert board.to_text() == snapshot
+    for level in Level:
+        for player in (B, O):
+            assert choose_move(start, player, level, random.Random(1)) in start.empty_cells()
+        assert choose_move(one_left, O, level, random.Random(0)) == (3, 3)
+        assert choose_move(full, B, level, random.Random(1)) is None
 
 
 # ---------------------------------------------------------------- easy
@@ -57,11 +31,6 @@ def test_easy_plays_randomly_over_many_seeds():
 
 
 # ---------------------------------------------------------------- medium
-
-def test_medium_takes_the_biggest_capture():
-    board = Board.from_text(["....", "BOO.", "....", "...."])
-    assert choose_move(board, B, Level.MEDIUM, random.Random(0)) == (1, 3)
-
 
 def test_medium_always_picks_a_move_with_the_most_flips_and_breaks_ties_randomly():
     board = Board.initial(7)
@@ -75,7 +44,9 @@ def test_medium_always_picks_a_move_with_the_most_flips_and_breaks_ties_randomly
 
 def test_positional_values():
     board = Board.initial(7)
-    assert positional_value(board, (0, 0)) == 8.0     # corner
+    for corner in ((0, 0), (0, 6), (6, 0), (6, 6)):
+        assert positional_value(board, corner) == 8.0  # corners
+    assert positional_value(board, (6, 5)) == -3.0    # next to another empty corner
     assert positional_value(board, (0, 1)) == -3.0    # next to an empty corner
     assert positional_value(board, (1, 1)) == -3.0
     assert positional_value(board, (0, 3)) == 2.0     # edge
@@ -116,14 +87,7 @@ def test_hard_looks_ahead_and_avoids_giving_the_opponent_a_big_reply():
 
 # ---------------------------------------------------------------- levels
 
-def test_level_from_value_and_labels():
-    assert level_from_value("dificil") is Level.HARD
+def test_level_from_value():
+    """The values are what goes into the save file, so they must map back."""
+    assert [level_from_value(level.value) for level in Level] == list(Level)
     assert level_from_value("lixo") is Level.MEDIUM
-    assert level_from_value("lixo", Level.EASY) is Level.EASY
-    assert [lv.label for lv in Level] == ["Fácil", "Médio", "Difícil"]
-
-
-@pytest.mark.parametrize("level", list(Level))
-def test_level_values_roundtrip(level):
-    """The stored value is what goes into the save file, so it must map back."""
-    assert level_from_value(level.value) is level

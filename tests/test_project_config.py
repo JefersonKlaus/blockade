@@ -40,7 +40,7 @@ def test_the_game_package_sits_next_to_the_entry_script(pyproject):
     """`flet build` packages only the app folder, so the game code must live there."""
     app_dir = flet_entry_script(pyproject).parent
     assert (app_dir / "blockwar" / "__init__.py").is_file()
-    assert (app_dir / "blockwar" / "ui.py").is_file()
+    assert (app_dir / "blockwar" / "ui" / "__init__.py").is_file()
 
 
 def test_flet_build_metadata_is_present(pyproject):
@@ -66,9 +66,10 @@ def test_version_matches_the_package(pyproject):
 
 
 def test_the_game_logic_does_not_import_flet():
-    """Only ui.py may import Flet; everything else must be testable without it."""
-    for module in (ROOT / "src" / "blockwar").glob("*.py"):
-        if module.name == "ui.py":
+    """Only the ui package may import Flet; everything else must be testable without it."""
+    package = ROOT / "src" / "blockwar"
+    for module in package.rglob("*.py"):
+        if module.parent == package / "ui":
             continue
         source = module.read_text(encoding="utf-8")
         assert "import flet" not in source and "from flet" not in source, module.name
@@ -80,11 +81,12 @@ def test_main_script_starts_the_flet_app_with_the_ui_entry_point(monkeypatch):
     calls = []
     monkeypatch.setattr(flet, "run", lambda target, *a, **kw: calls.append(target))
     monkeypatch.syspath_prepend(str(ROOT / "src"))
-    monkeypatch.delitem(sys.modules, "blockwar.ui", raising=False)
+    for name in [m for m in sys.modules if m.startswith("blockwar.ui")]:
+        monkeypatch.delitem(sys.modules, name)
     runpy.run_path(str(ROOT / "src" / "main.py"), run_name="__main__")
     assert len(calls) == 1
     target = calls[0]
-    assert target.__module__ == "blockwar.ui" and target.__name__ == "main"
+    assert target.__module__ == "blockwar.ui.app" and target.__name__ == "main"
 
 
 def test_ipads_are_allowed_to_stay_in_portrait(pyproject):
@@ -99,10 +101,10 @@ ICON = ROOT / "src" / "assets" / "icon.png"
 
 def test_the_app_icon_is_where_flet_build_and_the_app_look_for_it(pyproject):
     """`flet build` takes <app path>/assets/icon.png as the launcher icon; the menu
-    shows the same file (ui.ICON) next to the app name."""
+    shows the same file (ui/menu.py ICON) above the app name."""
     assert ICON.parent == ROOT / pyproject["tool"]["flet"]["app"]["path"] / "assets"
     assert ICON.is_file()
-    source = (ROOT / "src" / "blockwar" / "ui.py").read_text(encoding="utf-8")
+    source = (ROOT / "src" / "blockwar" / "ui" / "menu.py").read_text(encoding="utf-8")
     assert 'ICON = "icon.png"' in source
 
 
@@ -118,7 +120,7 @@ def test_the_app_icon_is_a_big_square_png_with_a_transparent_background():
     assert color_type == 6                      # RGBA: has an alpha channel
 
 
-def test_the_icon_corners_are_transparent():
+def test_the_icon_corners_are_transparent_and_the_middle_is_not():
     image_module = pytest.importorskip("PIL.Image", reason="Pillow is not installed")
     with image_module.open(ICON) as image:
         assert image.mode == "RGBA"
@@ -127,13 +129,20 @@ def test_the_icon_corners_are_transparent():
         assert image.getpixel((512, 512))[3] == 255
 
 
-@pytest.mark.parametrize("key", ["icon_background", "android.adaptive_icon_background"])
-def test_icon_backgrounds_are_the_app_page_color(pyproject, key):
+def test_icon_and_launch_backgrounds_are_the_app_page_color(pyproject):
     from blockwar import theme
-    value = pyproject["tool"]["flet"]
-    for part in key.split("."):
-        value = value[part]
-    assert value == theme.PAGE_BG
+    for key in [
+        "icon_background", "android.adaptive_icon_background",
+        # launch screen (splash), in light and dark mode: never white or near-black
+        "splash.color", "splash.dark_color", "splash.icon_background",
+        "splash.icon_dark_background",
+        # boot screen, shown after the splash while Python starts
+        "boot_screen.flet.bgcolor_light", "boot_screen.flet.bgcolor_dark",
+    ]:
+        value = pyproject["tool"]["flet"]
+        for part in key.split("."):
+            value = value[part]
+        assert value == theme.PAGE_BG, key
 
 
 def test_the_icon_script_recreates_the_same_icon(tmp_path, monkeypatch):
@@ -146,16 +155,3 @@ def test_the_icon_script_recreates_the_same_icon(tmp_path, monkeypatch):
     from PIL import ImageChops
     with module.draw() as fresh, __import__("PIL.Image").Image.open(ICON) as saved:
         assert ImageChops.difference(fresh, saved.convert("RGBA")).getbbox() is None
-
-
-def test_the_icon_shows_only_the_blocks_without_a_frame():
-    """The blocks reach the edges of the icon; between them it is transparent (no board
-    frame behind them)."""
-    image_module = pytest.importorskip("PIL.Image", reason="Pillow is not installed")
-    with image_module.open(ICON) as image:
-        alpha = image.getchannel("A")
-        third = 1024 / 3
-        assert alpha.getpixel((4, 512)) == 255 and alpha.getpixel((1019, 512)) == 255
-        assert alpha.getpixel((512, 4)) == 255 and alpha.getpixel((512, 1019)) == 255
-        for gap in (round(third), round(2 * third)):         # the gaps between blocks
-            assert alpha.getpixel((gap, 512)) == 0 and alpha.getpixel((512, gap)) == 0

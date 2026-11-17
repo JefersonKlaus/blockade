@@ -1,7 +1,8 @@
-"""Tabuleiro imutável e a regra de captura (o coração do jogo).
+"""The immutable board and the capture rule (the heart of the game).
 
-Regra: ao colocar um bloco, em cada uma das 8 direções, se houver uma fila de blocos
-inimigos seguida de um bloco seu, toda a fila vira sua. Capturas não encadeiam.
+Rule: when a block is placed, in each of the 8 directions, a line of the opponent's
+blocks followed by one of your own blocks turns entirely to your side. Captures do not
+chain.
 """
 from __future__ import annotations
 
@@ -18,18 +19,18 @@ Cell = Optional[Player]
 
 @dataclass(frozen=True)
 class Board:
-    """Grade quadrada de casas vazias (None) ou ocupadas por um jogador."""
+    """Square grid of empty squares (None) or squares taken by a player."""
 
     size: int
     cells: tuple[tuple[Cell, ...], ...]
 
-    # ------------------------------------------------------------- criação
+    # ------------------------------------------------------------- creating
 
     @classmethod
     def initial(cls, size: int) -> "Board":
-        """Tabuleiro inicial: 4 blocos no centro, em xadrez (2 de cada lado)."""
+        """Starting board: 4 blocks in the centre, chequered (2 for each side)."""
         if not MIN_BOARD <= size <= MAX_BOARD:
-            raise ValueError(f"tamanho deve estar entre {MIN_BOARD} e {MAX_BOARD}")
+            raise ValueError(f"size must be between {MIN_BOARD} and {MAX_BOARD}")
         mid = size // 2
         rows: list[list[Cell]] = [[None] * size for _ in range(size)]
         rows[mid - 1][mid - 1] = Player.BLUE
@@ -40,21 +41,18 @@ class Board:
 
     @classmethod
     def from_text(cls, lines: Sequence[str]) -> "Board":
-        """Monta um tabuleiro a partir de texto: 'B' azul, 'O' laranja, '.' vazio."""
+        """Builds a board from text: 'B' blue, 'O' orange, '.' empty (handy in tests)."""
         size = len(lines)
         if any(len(line) != size for line in lines):
-            raise ValueError("o tabuleiro de texto precisa ser quadrado")
+            raise ValueError("the text board must be square")
         table = {"B": Player.BLUE, "O": Player.ORANGE, ".": None}
         try:
             rows = tuple(tuple(table[ch] for ch in line) for line in lines)
         except KeyError as error:
-            raise ValueError(f"caractere inválido: {error}") from None
+            raise ValueError(f"invalid character: {error}") from None
         return cls(size, rows)
 
-    def to_text(self) -> list[str]:
-        return ["".join(c.letter if c else "." for c in row) for row in self.cells]
-
-    # ------------------------------------------------------------- consulta
+    # ------------------------------------------------------------- queries
 
     def in_bounds(self, pos: Pos) -> bool:
         return 0 <= pos[0] < self.size and 0 <= pos[1] < self.size
@@ -85,10 +83,10 @@ class Board:
         last = self.size - 1
         return ((0, 0), (0, last), (last, 0), (last, last))
 
-    # ------------------------------------------------------------- mudança
+    # ------------------------------------------------------------- changing
 
     def with_changes(self, changes: dict[Pos, Cell]) -> "Board":
-        """Devolve um tabuleiro novo com as casas indicadas alteradas."""
+        """Returns a new board with the given squares changed."""
         rows = [list(row) for row in self.cells]
         for (r, c), value in changes.items():
             rows[r][c] = value
@@ -96,7 +94,7 @@ class Board:
 
 
 def flips_for(board: Board, pos: Pos, player: Player) -> tuple[Pos, ...]:
-    """Blocos que viram se `player` colocar um bloco em `pos` (vazio se nada vira)."""
+    """Blocks that turn if `player` places a block at `pos` (empty if nothing turns)."""
     if not board.in_bounds(pos) or board.get(pos) is not None:
         return ()
     flipped: list[Pos] = []
@@ -112,11 +110,11 @@ def flips_for(board: Board, pos: Pos, player: Player) -> tuple[Pos, ...]:
 
 
 def apply_move(board: Board, pos: Pos, player: Player) -> tuple[Board, tuple[Pos, ...]]:
-    """Coloca o bloco e vira o que for capturado. Levanta IllegalMove se não der."""
+    """Places the block and turns whatever is captured. Raises IllegalMove if it can't."""
     if not board.in_bounds(pos):
-        raise IllegalMove(f"{pos} está fora do tabuleiro")
+        raise IllegalMove(f"{pos} is off the board")
     if board.get(pos) is not None:
-        raise IllegalMove(f"{pos} já está ocupada")
+        raise IllegalMove(f"{pos} is already taken")
     flipped = flips_for(board, pos, player)
     changes: dict[Pos, Cell] = {pos: player}
     changes.update({p: player for p in flipped})

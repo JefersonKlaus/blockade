@@ -1,4 +1,4 @@
-"""O adversário do celular, em três níveis."""
+"""The computer opponent (the phone), at three levels."""
 from __future__ import annotations
 
 import random
@@ -10,25 +10,27 @@ from .models import Player, Pos
 
 
 class Level(Enum):
+    """How smart the phone is. The values are written to the save file (and are part of
+    the record keys), so they keep their original Portuguese words. The names shown on
+    screen are in texts.py."""
+
     EASY = "facil"
     MEDIUM = "medio"
     HARD = "dificil"
 
-    @property
-    def label(self) -> str:
-        return {"facil": "Fácil", "medio": "Médio", "dificil": "Difícil"}[self.value]
 
-
-def level_from_value(value: str, default: Level = Level.MEDIUM) -> Level:
+def level_from_value(value: object) -> Level:
+    """The level with this value ("facil", "medio", "dificil"); anything else gives
+    MEDIUM."""
     for level in Level:
         if level.value == value:
             return level
-    return default
+    return Level.MEDIUM
 
 
 def positional_value(board: Board, pos: Pos) -> float:
-    """Valor estratégico de uma casa: cantos são ótimos, casas coladas num canto vazio são
-    perigosas (abrem o canto para o adversário) e bordas são boas."""
+    """Strategic value of a square: corners are great, squares next to an empty corner
+    are dangerous (they open the corner to the opponent) and edges are good."""
     last = board.size - 1
     r, c = pos
     if pos in board.corners:
@@ -42,7 +44,7 @@ def positional_value(board: Board, pos: Pos) -> float:
 
 
 def _best_reply_gain(board: Board, player: Player) -> float:
-    """Quanto `player` conseguiria de melhor numa resposta (ganho + valor da casa)."""
+    """The best `player` could get with a reply (blocks turned + value of the square)."""
     best = 0.0
     for pos in board.empty_cells():
         gain = len(flips_for(board, pos, player)) + positional_value(board, pos)
@@ -61,7 +63,7 @@ def _score(board: Board, pos: Pos, player: Player, level: Level) -> float:
 
 def choose_move(board: Board, player: Player, level: Level,
                 rng: random.Random) -> Optional[Pos]:
-    """Escolhe a casa do robô. Devolve None se não há casa livre."""
+    """Chooses the computer's square. Returns None when no square is free."""
     empties = board.empty_cells()
     if not empties:
         return None

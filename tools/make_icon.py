@@ -4,7 +4,7 @@ The same file is used
   - by `flet build` as the launcher icon on Android, iOS, web and desktop (Flet adds the
     platform margins and, where transparency is not allowed, the `icon_background` colour
     from pyproject.toml), and
-  - by the app itself, next to the name at the top of the menu.
+  - by the app itself, above the name at the top of the menu.
 
 Run it again after changing the colours in theme.py:
 

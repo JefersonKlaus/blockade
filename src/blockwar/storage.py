@@ -1,4 +1,8 @@
-"""Salva configurações e recordes em um arquivo JSON (tolerante a arquivo ruim)."""
+"""The save file (JSON): where it lives, how it is read and how it is written.
+
+This is the only module that knows the file format. A bad file never breaks the app:
+each invalid field falls back to its default without spoiling the others.
+"""
 from __future__ import annotations
 
 import json
@@ -8,28 +12,33 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from .mathmode import MathSettings, settings_from_dict, settings_from_legacy_level
+from .bot import Level, level_from_value
+from .mathmode import ADD, DEFAULT_TABLES, MUL, OPERATIONS, SUB, TABLES, MathSettings
+from .models import Mode
 
 logger = logging.getLogger(__name__)
 
+# The file keeps the app's former name ("Guerra dos Blocos"), so existing saves and
+# records are still found after the rename to Blockade.
 SAVE_NAME = "guerra_dos_blocos.json"
 OUTCOMES = ("wins", "losses", "draws")
-_MODES = ("bot", "dois")
-_LEVELS = ("facil", "medio", "dificil")
 
 
 @dataclass
 class SaveData:
-    mode: str = "bot"
-    bot_level: str = "medio"
+    """Everything that is saved: the menu choices and the records."""
+
+    mode: Mode = Mode.BOT
+    bot_level: Level = Level.MEDIUM
     math: MathSettings = field(default_factory=MathSettings)
     games_played: int = 0
     records: dict[str, dict[str, int]] = field(default_factory=dict)
+    tutorial_seen: bool = False   # the "How to play" tutorial has opened by itself once
 
 
 def default_path() -> Path:
-    """GUERRA_SAVE (testes) > pasta de dados do app no Flet > pasta do usuário."""
-    override = os.environ.get("GUERRA_SAVE")
+    """BLOCKADE_SAVE (tests) > the app's data folder in Flet > the user's home folder."""
+    override = os.environ.get("BLOCKADE_SAVE")
     if override:
         return Path(override)
     app_data = os.environ.get("FLET_APP_STORAGE_DATA")
@@ -38,49 +47,19 @@ def default_path() -> Path:
     return Path.home() / ".guerra_dos_blocos" / SAVE_NAME
 
 
-def _int(value: Any, default: int) -> int:
-    ok = isinstance(value, int) and not isinstance(value, bool) and value >= 0
-    return value if ok else default
+# ------------------------------------------------------------------ writing
 
-
-def _clean_records(raw: Any) -> dict[str, dict[str, int]]:
-    if not isinstance(raw, dict):
-        return {}
-    cleaned: dict[str, dict[str, int]] = {}
-    for key, value in raw.items():
-        if isinstance(key, str) and isinstance(value, dict):
-            cleaned[key] = {name: _int(value.get(name), 0) for name in OUTCOMES}
-    return cleaned
-
-
-def load_save(path: Optional[Path] = None) -> SaveData:
-    """Lê o arquivo; qualquer problema devolve valores padrão em vez de quebrar o app."""
-    path = path or default_path()
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return SaveData()
-    if not isinstance(raw, dict):
-        return SaveData()
-    mode, level = raw.get("mode"), raw.get("bot_level")
-    # Saves antigos tinham só um "math_level" (0 a 3); os novos guardam as escolhas.
-    math = (settings_from_dict(raw["math"]) if "math" in raw
-            else settings_from_legacy_level(raw.get("math_level")))
-    return SaveData(
-        mode=mode if mode in _MODES else "bot",
-        bot_level=level if level in _LEVELS else "medio",
-        math=math,
-        games_played=_int(raw.get("games_played"), 0),
-        records=_clean_records(raw.get("records")),
-    )
+def math_to_dict(math: MathSettings) -> dict[str, Any]:
+    return {"operations": list(math.ordered_operations()),
+            "tables": list(math.ordered_tables())}
 
 
 def save_save(data: SaveData, path: Optional[Path] = None) -> bool:
-    """Grava com arquivo temporário + troca, para não deixar o save pela metade."""
+    """Writes a temporary file and swaps it in, so a save is never left half-written."""
     path = path or default_path()
-    payload = {"mode": data.mode, "bot_level": data.bot_level,
-               "math": data.math.to_dict(), "games_played": data.games_played,
-               "records": data.records}
+    payload = {"mode": data.mode.value, "bot_level": data.bot_level.value,
+               "math": math_to_dict(data.math), "games_played": data.games_played,
+               "records": data.records, "tutorial_seen": data.tutorial_seen}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         temp = path.with_suffix(path.suffix + ".tmp")
@@ -88,18 +67,71 @@ def save_save(data: SaveData, path: Optional[Path] = None) -> bool:
         temp.replace(path)
         return True
     except OSError:
-        logger.warning("não consegui salvar em %s", path, exc_info=True)
+        logger.warning("could not save to %s", path, exc_info=True)
         return False
 
 
-def record_outcome(data: SaveData, key: str, outcome: str) -> None:
-    """Soma uma vitória ('wins'), derrota ('losses') ou empate ('draws') à chave da partida."""
-    if outcome not in OUTCOMES:
-        raise ValueError(f"resultado inválido: {outcome}")
-    entry = data.records.setdefault(key, {name: 0 for name in OUTCOMES})
-    entry[outcome] += 1
-    data.games_played += 1
+# ------------------------------------------------------------------ reading
+
+def load_save(path: Optional[Path] = None) -> SaveData:
+    """Reads the file; any problem gives the defaults instead of breaking the app."""
+    path = path or default_path()
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return SaveData()
+    if not isinstance(raw, dict):
+        return SaveData()
+    # Old saves only had a "math_level" (0 to 3); newer ones keep the actual choices.
+    math = (math_from_dict(raw["math"]) if "math" in raw
+            else math_from_legacy_level(raw.get("math_level")))
+    return SaveData(
+        mode=Mode.TWO if raw.get("mode") == Mode.TWO.value else Mode.BOT,
+        bot_level=level_from_value(raw.get("bot_level")),
+        math=math,
+        games_played=_count(raw.get("games_played")),
+        records=_records(raw.get("records")),
+        tutorial_seen=raw.get("tutorial_seen") is True,
+    )
 
 
-def record_for(data: SaveData, key: str) -> dict[str, int]:
-    return dict(data.records.get(key, {name: 0 for name in OUTCOMES}))
+def _is_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _count(value: Any) -> int:
+    """A counter: an integer, never negative (otherwise zero)."""
+    return value if _is_int(value) and value >= 0 else 0
+
+
+def _records(raw: Any) -> dict[str, dict[str, int]]:
+    if not isinstance(raw, dict):
+        return {}
+    return {key: {name: _count(value.get(name)) for name in OUTCOMES}
+            for key, value in raw.items() if isinstance(key, str) and isinstance(value, dict)}
+
+
+def math_from_dict(raw: Any) -> MathSettings:
+    """Reads the math choices; each bad field falls back to its default without spoiling
+    the others. Also reads the previous format, which had a separate "enabled"."""
+    if not isinstance(raw, dict):
+        return MathSettings()
+    raw_ops, raw_tables = raw.get("operations"), raw.get("tables")
+    operations: frozenset[str] = frozenset()
+    if isinstance(raw_ops, list) and raw.get("enabled") is not False:
+        operations = frozenset(op for op in raw_ops if op in OPERATIONS)
+    tables: frozenset[int] = frozenset()
+    if isinstance(raw_tables, list):
+        tables = frozenset(t for t in raw_tables if _is_int(t) and t in TABLES)
+    return MathSettings(operations=operations, tables=tables or DEFAULT_TABLES)
+
+
+def math_from_legacy_level(level: Any) -> MathSettings:
+    """Converts the old "math level" (0 to 3) of the oldest saves."""
+    if not _is_int(level):
+        return MathSettings()
+    return {
+        1: MathSettings(frozenset({ADD, SUB})),
+        2: MathSettings(frozenset({ADD, SUB, MUL}), frozenset({2, 3, 4, 5})),
+        3: MathSettings(frozenset(OPERATIONS), frozenset(range(2, 11))),
+    }.get(level, MathSettings())

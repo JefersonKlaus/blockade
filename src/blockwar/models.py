@@ -1,39 +1,43 @@
-"""Tipos básicos compartilhados: jogadores, posições e erros."""
+"""Basic shared types: players, game modes, positions and errors."""
 from __future__ import annotations
 
 from enum import Enum
 from typing import Tuple
 
-# Uma posição no tabuleiro: (linha, coluna), começando em zero no canto superior esquerdo.
+# A position on the board: (row, column), starting at zero in the top-left corner.
 Pos = Tuple[int, int]
 
-DEFAULT_SIZE = 7             # tamanho usado quando a tela ainda não informou a dela
-MIN_BOARD, MAX_BOARD = 4, 14  # limites aceitos pelo motor (o tamanho vem da tela)
+DEFAULT_SIZE = 7             # size used while the screen has not reported its own yet
+MIN_BOARD, MAX_BOARD = 4, 14  # limits accepted by the engine (the size comes from the screen)
 
 
 class Player(Enum):
-    """Os dois lados da guerra. Cada um tem cor e símbolo (ajuda quem não distingue cores)."""
+    """The two sides. Each has a colour and a symbol (helps players who can't tell the
+    colours apart)."""
 
-    BLUE = "azul"
-    ORANGE = "laranja"
+    BLUE = "blue"
+    ORANGE = "orange"
 
     @property
     def other(self) -> "Player":
         return Player.ORANGE if self is Player.BLUE else Player.BLUE
 
     @property
-    def label(self) -> str:
-        return self.value.capitalize()
-
-    @property
     def symbol(self) -> str:
-        return "●" if self is Player.BLUE else "▲"  # círculo / triângulo
+        return "●" if self is Player.BLUE else "▲"  # circle / triangle
 
-    @property
-    def letter(self) -> str:
-        """Letra usada nos tabuleiros de texto dos testes: B ou O."""
-        return "B" if self is Player.BLUE else "O"
+
+class Mode(Enum):
+    """Who plays. The value is also what is written to the save file, so it must not
+    change (older saves use these words)."""
+
+    BOT = "bot"      # you (Blue) against the phone (Orange)
+    TWO = "dois"     # two people on the same device ("dois" = two)
+
+
+HUMAN_PLAYER = Player.BLUE   # against the phone, you are always Blue...
+BOT_PLAYER = Player.ORANGE   # ...and the phone is Orange
 
 
 class IllegalMove(ValueError):
-    """Jogada impossível: fora do tabuleiro, casa ocupada ou partida já terminada."""
+    """Impossible move: off the board, square taken, or the game is already over."""

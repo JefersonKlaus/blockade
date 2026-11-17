@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blockade"
-version = "0.1.0"
+version = "1.2.0"
 description = "Blockade: turn-based board game for kids. Squeeze the other side's blocks to turn them into yours."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,12 +44,28 @@ icon_background = "#FFF8F0"
 [tool.flet.android]
 adaptive_icon_background = "#FFF8F0"
 
+# Launch screen (splash) on Android, iOS and web: the app icon on the app's cream page
+# colour. Without these, Flet uses white, and almost black (#222222) when the phone is in
+# dark mode. The game is always light, so dark mode gets the same cream. The picture is
+# src/assets/icon.png (there is no separate splash image).
+[tool.flet.splash]
+color = "#FFF8F0"
+dark_color = "#FFF8F0"
+icon_background = "#FFF8F0"        # Android 12+: circle behind the splash icon
+icon_dark_background = "#FFF8F0"
+
+# Boot screen: shown right after the splash while Python starts inside the app. Same
+# cream, so the launch goes splash -> boot -> menu without any dark flash.
+[tool.flet.boot_screen.flet]
+bgcolor_light = "#FFF8F0"
+bgcolor_dark = "#FFF8F0"
+
 [tool.flet.app]
 path = "src"     # `flet run` / `flet build` look for the app in this folder...
 module = "main"  # ...and start it from src/main.py
 
 # The game is portrait-only. On phones the app locks itself at startup
-# (page.set_allowed_device_orientations in ui.py). iPads only honour that lock when the
+# (page.set_allowed_device_orientations in ui/app.py). iPads only honour that lock when the
 # app opts out of split-screen multitasking:
 [tool.flet.ios.info]
 UIRequiresFullScreen = true

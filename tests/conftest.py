@@ -21,7 +21,7 @@ def isolated_save_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Every test gets its own save file, so no test ever reads or overwrites the
     real scores in ~/.guerra_dos_blocos or in Flet's app storage folder."""
     path = tmp_path / "save" / "guerra_dos_blocos.json"
-    monkeypatch.setenv("GUERRA_SAVE", str(path))
+    monkeypatch.setenv("BLOCKADE_SAVE", str(path))
     monkeypatch.delenv("FLET_APP_STORAGE_DATA", raising=False)
     return path
 
